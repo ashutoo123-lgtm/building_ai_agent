@@ -112,7 +112,14 @@ async def send_llm_request(request: SendPrompt):
                         temperature= 0.7
                     )
             return (RESPONSE.choices[0].message.parsed)
-        return "BYE"    
+        else :
+            output =  await client.chat.completions.create(model="nvidia/nemotron-3-ultra-550b-a55b",
+                        messages=messages,
+                        
+                        
+                        max_tokens= 1000,
+                        temperature= 0.7)  
+            return output.choices[0].message.content
         
     
     
