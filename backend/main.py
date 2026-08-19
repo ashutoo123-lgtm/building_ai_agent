@@ -1,12 +1,13 @@
 import json
 import os
-from Tools import calculate_sum
+from .Tools import calculate_sum
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncOpenAI
-from pydantic import BaseModel
-from TOOL_SCHEMA import TOOLS
+from pydantic import BaseModel , Field
+from .TOOL_SCHEMA import TOOLS
+from typing import Annotated , Literal , Union
 
 load_dotenv()
 
@@ -42,8 +43,17 @@ class SendPrompt(BaseModel):
 
 
 class StructuredResponse(BaseModel):
+    action : Literal["nameandlanguage"]
     name: str
     language : str
+class weather(BaseModel):
+    action : Literal["weather"] = "weather"
+    location: str
+    weather : str
+UnifiedOutputUnion = Annotated[Union[StructuredResponse, weather], Field(discriminator="action")]    
+class CombinedResponseContainer(BaseModel):
+    data: UnifiedOutputUnion
+
 class calculation_structured_output(BaseModel):
     tool_used : str| None
     action : str | None
@@ -55,7 +65,7 @@ class calculation_structured_output(BaseModel):
     result : float | None
    
 @app.post("/chat")
-async def send_llm_request(request: SendPrompt):
+async def here_send_llm_request(request: SendPrompt):
     messages  = [
                 {
                     "role": "system",
@@ -81,8 +91,7 @@ async def send_llm_request(request: SendPrompt):
             # },
             tools= TOOLS,
             tool_choice= "auto",
-            max_tokens= 1000,
-            temperature= 0.7
+        
         )
         Content = response.choices[0].message
         if Content.tool_calls:
@@ -108,18 +117,31 @@ async def send_llm_request(request: SendPrompt):
                         
                         
                         
-                        max_tokens= 1000,
-                        temperature= 0.7
+                        
+                        
                     )
             return (RESPONSE.choices[0].message.parsed)
         else :
-            output =  await client.chat.completions.create(model="nvidia/nemotron-3-ultra-550b-a55b",
-                        messages=messages,
+            output =  await client.chat.completions.parse(model="nvidia/nemotron-3-ultra-550b-a55b",
+                                                          
+                        messages= [
+                {
+                    "role": "system",
+                    "content": "You are an helpful assitant given tools when required"
+                },
+                {
+                    "role": "user",
+                    "content": request.prompt
+                }
+            ],
+                  response_format   = CombinedResponseContainer, 
+
+
+
                         
                         
-                        max_tokens= 1000,
-                        temperature= 0.7)  
-            return output.choices[0].message.content
+                        )  
+            return (output.choices[0].message.parsed)
         
     
     
