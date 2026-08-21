@@ -47,7 +47,7 @@ class StructuredResponse(BaseModel):
     name: str
     language : str
 class weather(BaseModel):
-    action : Literal["weather"] = "weather"
+    action : Literal["weather"] 
     location: str
     weather : str
 UnifiedOutputUnion = Annotated[Union[StructuredResponse, weather], Field(discriminator="action")]    
@@ -111,7 +111,7 @@ async def here_send_llm_request(request: SendPrompt):
             messages.append({"role": "tool",
                              "tool_call_id" : tool_call.id,
                              "content" : json.dumps(tool_result)})
-            RESPONSE = await client.chat.completions.parse(model="nvidia/nemotron-3-ultra-550b-a55b",
+            RESPONSE = await client.beta.chat.completions.parse(model="nvidia/nemotron-3-ultra-550b-a55b",
                         messages=messages,
                         response_format= calculation_structured_output,
                         
@@ -122,7 +122,7 @@ async def here_send_llm_request(request: SendPrompt):
                     )
             return (RESPONSE.choices[0].message.parsed)
         else :
-            output =  await client.chat.completions.parse(model="nvidia/nemotron-3-ultra-550b-a55b",
+            output =  await client.beta.chat.completions.create(model="nvidia/nemotron-3-ultra-550b-a55b",
                                                           
                         messages= [
                 {
@@ -134,18 +134,28 @@ async def here_send_llm_request(request: SendPrompt):
                     "content": request.prompt
                 }
             ],
-                  response_format   = CombinedResponseContainer, 
+             response_format= {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "CombinedResponseContainer",
+                    "schema":CombinedResponseContainer.model_json_schema()
+                }
+            },
 
 
 
                         
                         
                         )  
-            return (output.choices[0].message.parsed)
-        
-    
-    
-          
+            parsed = output.choices[0].message.content
+            if parsed is None:
+                raise HTTPException(status_code = 422 , detail = ["structured output parsing failed"])
+            else :
+
+
+                json_string_to_python_object = json.loads(parsed)
+                pydantic_converted  = CombinedResponseContainer.model_validate(json_string_to_python_object)
+                return (pydantic_converted)
 
     
 
